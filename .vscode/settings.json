@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "expirer-le-virtuel.slnx"
+    "dotnet.defaultSolution": "expirer_le_virtuel.slnx"
 }

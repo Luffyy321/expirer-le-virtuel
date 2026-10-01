@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -6,29 +5,39 @@ public class FireTrigger : MonoBehaviour
 {
     public ParticleSystem fireEffect;
     public AudioSource fireAudio;
-    public Key triggerKey = Key.Space;
     public Transform mouthPoint;
     public float fireRange = 5f;
     public float fireRadius = 0.3f;
 
+    public BreathDetector breathDetector; 
+
+    public bool autoriserToucheDebug = true;
+    public Key triggerKey = Key.Space;
+
+    private bool souffleEnCours = false;
 
     void Update()
     {
-        if (Keyboard.current[triggerKey].wasPressedThisFrame)
+        bool souffleActif = (breathDetector != null && breathDetector.souffle)
+                             || (autoriserToucheDebug && Keyboard.current[triggerKey].isPressed);
+
+        if (souffleActif && !souffleEnCours)
         {
+            souffleEnCours = true;
             fireEffect.Play();
             if (fireAudio != null && !fireAudio.isPlaying)
                 fireAudio.Play();
         }
 
-        if (Keyboard.current[triggerKey].wasReleasedThisFrame)
+        if (!souffleActif && souffleEnCours)
         {
+            souffleEnCours = false;
             fireEffect.Stop();
             if (fireAudio != null)
                 fireAudio.Stop();
         }
 
-        if (Keyboard.current[triggerKey].isPressed)
+        if (souffleEnCours)
         {
             CheckTorchHit();
         }
