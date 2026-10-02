@@ -32,7 +32,12 @@ public class BreathDetector : MonoBehaviour
     // vrai quand on detecte un souffle, lisible par les autres scripts
     public bool souffle = false;
 
+    // un souffle doit durer au moins ce temps (en secondes) pour compter
+    // ca ignore les bruits courts comme un coup sur la table ou une consonne
+    public float dureeMinSouffle = 0.2f;
+
     bool actif;
+    float tempsSouffle = 0f; // depuis combien de temps on entend un souffle sans interruption
 
     void Start()
     {
@@ -58,13 +63,21 @@ public class BreathDetector : MonoBehaviour
         if (!calibrationTerminee)
         {
             souffle = false;
+            tempsSouffle = 0f;
             return; // le Calibrator gere tout tant que ce n'est pas fini
         }
 
         if (!actif && volumeLisse > seuilVolumeHaut) actif = true;
         else if (actif && volumeLisse < seuilVolumeBas) actif = false;
 
-        souffle = actif && freqPic < seuilFreqSouffle;
+        // on compte depuis combien de temps le son ressemble a un souffle
+        if (actif && freqPic < seuilFreqSouffle)
+            tempsSouffle += Time.deltaTime;
+        else
+            tempsSouffle = 0f;
+
+        // on valide le souffle seulement s'il dure assez longtemps
+        souffle = tempsSouffle >= dureeMinSouffle;
 
         if (!actif)
         {

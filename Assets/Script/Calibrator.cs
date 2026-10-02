@@ -4,14 +4,13 @@ using UnityEngine.InputSystem;
 
 public class Calibrator : MonoBehaviour
 {
-    [SerializeField] BreathDetector detector; // a glisser dans l'inspector
-    [SerializeField] float dureePhase = 3f; // combien de temps dure chaque phase
-    [SerializeField] float dureePause = 2f; // pause avant chaque phase pour se preparer
+    public BreathDetector detector; // a glisser dans l'inspector
+    public float dureePhase = 3f; // combien de temps dure chaque phase
 
-    enum Phase { Silence, Souffle, Voix, Termine }
-    Phase phaseActuelle = Phase.Silence;
-    float tempsPhase = 0f;
-    bool enPause = true;
+    public enum Phase { Intro, Silence, Voix, Souffle, Termine }
+    public Phase phaseActuelle = Phase.Intro;
+    public float tempsPhase = 0f;
+    public bool enPause = true; // vrai tant que l'utilisateur n'a pas clique sur "Je suis pret"
 
     List<float> volumesSilence = new List<float>();
     List<float> volumesSouffle = new List<float>();
@@ -22,19 +21,17 @@ public class Calibrator : MonoBehaviour
     void Start()
     {
         // si on a deja calibre une fois, on reprend les seuils sauvegardes
+        // (l'ecran d'intro s'affiche quand meme, le calibrage se relance avec le bouton)
         if (PlayerPrefs.HasKey("seuilFreqSouffle"))
         {
             detector.seuilVolumeHaut = PlayerPrefs.GetFloat("seuilVolumeHaut");
             detector.seuilVolumeBas = PlayerPrefs.GetFloat("seuilVolumeBas");
             detector.seuilFreqSouffle = PlayerPrefs.GetFloat("seuilFreqSouffle");
             detector.calibrationTerminee = true;
-            phaseActuelle = Phase.Termine;
-            Debug.Log("calibrage : seuils sauvegardes recuperes (C pour recalibrer)");
+            Debug.Log("calibrage : seuils sauvegardes recuperes");
         }
-        else
-        {
-            LancerCalibrage();
-        }
+
+        phaseActuelle = Phase.Intro;
     }
 
     void Update()
@@ -45,49 +42,41 @@ public class Calibrator : MonoBehaviour
             LancerCalibrage();
         }
 
-        // si c'est fini ou si on a pas de detector on fait rien
-        if (phaseActuelle == Phase.Termine) return;
+        // si on est sur l'intro, si c'est fini ou si on a pas de detector on fait rien
+        if (phaseActuelle == Phase.Intro || phaseActuelle == Phase.Termine) return;
         if (detector == null) return;
 
         // le detector lit le micro pour nous, si pas assez de data on attend
         if (!detector.RafraichirMesures()) return;
 
-        tempsPhase += Time.deltaTime;
+        // on attend que l'utilisateur clique sur "Je suis pret"
+        if (enPause) return;
 
-        // pendant la pause on enregistre rien
-        if (enPause)
-        {
-            if (tempsPhase >= dureePause)
-            {
-                enPause = false;
-                tempsPhase = 0f;
-            }
-            return;
-        }
+        tempsPhase += Time.deltaTime;
 
         // selon la phase actuelle on stocke pas les memes trucs
         if (phaseActuelle == Phase.Silence)
         {
             volumesSilence.Add(detector.volumeBrut);
         }
-        else if (phaseActuelle == Phase.Souffle)
+        else if (phaseActuelle == Phase.Voix)
         {
-            volumesSouffle.Add(detector.volumeBrut);
+            volumesVoix.Add(detector.volumeBrut);
 
             // on garde la frequence seulement si ca depasse clairement le bruit de fond
             // sinon ca fausse le calcul avec des mesures de silence
             if (detector.volumeBrut > MoyenneListe(volumesSilence) * 2f)
             {
-                freqsSouffle.Add(detector.freqPic);
+                freqsVoix.Add(detector.freqPic);
             }
         }
-        else if (phaseActuelle == Phase.Voix)
+        else if (phaseActuelle == Phase.Souffle)
         {
-            volumesVoix.Add(detector.volumeBrut);
+            volumesSouffle.Add(detector.volumeBrut);
 
             if (detector.volumeBrut > MoyenneListe(volumesSilence) * 2f)
             {
-                freqsVoix.Add(detector.freqPic);
+                freqsSouffle.Add(detector.freqPic);
             }
         }
 
@@ -98,17 +87,15 @@ public class Calibrator : MonoBehaviour
 
             if (phaseActuelle == Phase.Silence)
             {
-                phaseActuelle = Phase.Souffle;
-                enPause = true;
-                Debug.Log("calibrage : souffle " + dureePhase + " secondes");
-            }
-            else if (phaseActuelle == Phase.Souffle)
-            {
                 phaseActuelle = Phase.Voix;
                 enPause = true;
-                Debug.Log("calibrage : parle normalement " + dureePhase + " secondes");
             }
             else if (phaseActuelle == Phase.Voix)
+            {
+                phaseActuelle = Phase.Souffle;
+                enPause = true;
+            }
+            else if (phaseActuelle == Phase.Souffle)
             {
                 AppliquerSeuils();
                 phaseActuelle = Phase.Termine;
@@ -116,41 +103,16 @@ public class Calibrator : MonoBehaviour
         }
     }
 
-    // texte a l'ecran pendant le calibrage
-    void OnGUI()
+    // appele par le bouton "Je suis pret"
+    public void Pret()
     {
-        if (phaseActuelle == Phase.Termine) return;
-
-        string texte = "";
-        if (phaseActuelle == Phase.Silence) texte = "Silence";
-        else if (phaseActuelle == Phase.Souffle) texte = "Souffle";
-        else if (phaseActuelle == Phase.Voix) texte = "Parle";
-
-        int restant;
-        if (enPause)
-        {
-            texte = "Prépare-toi : " + texte;
-            restant = Mathf.CeilToInt(dureePause - tempsPhase);
-        }
-        else
-        {
-            restant = Mathf.CeilToInt(dureePhase - tempsPhase);
-        }
-
-        // fond blanc, texte noir, au milieu de l'ecran
-        GUIStyle style = new GUIStyle();
-        style.normal.background = Texture2D.whiteTexture;
-        style.normal.textColor = Color.black;
-        style.fontSize = 40;
-        style.alignment = TextAnchor.MiddleCenter;
-
-        float largeur = 600;
-        float hauteur = 100;
-        GUI.Label(new Rect((Screen.width - largeur) / 2, (Screen.height - hauteur) / 2, largeur, hauteur), texte + " (" + restant + ")", style);
+        enPause = false;
+        tempsPhase = 0f;
     }
 
     // remet tout a zero et recommence depuis la phase silence
-    void LancerCalibrage()
+    // appele par les boutons "Commencer le calibrage" et "Recalibrer"
+    public void LancerCalibrage()
     {
         volumesSilence.Clear();
         volumesSouffle.Clear();
@@ -163,7 +125,7 @@ public class Calibrator : MonoBehaviour
         enPause = true;
         detector.calibrationTerminee = false;
 
-        Debug.Log("calibrage : reste silencieux " + dureePhase + " secondes");
+        Debug.Log("calibrage : lance");
     }
 
     // calcule les seuils a partir de ce qu'on a mesure et les envoie au detector

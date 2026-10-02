@@ -9,10 +9,11 @@ public class Visualizer : MonoBehaviour
     public float vitesseDegonfle = 0.15f;
     public float tailleMin = 0.3f;
     public float tailleMax = 1.5f;
+    public Color couleur = Color.blue;
 
     void Start()
     {
-        GetComponent<Renderer>().material.color = Color.blue;
+        GetComponent<Renderer>().material.color = couleur;
         transform.localScale = new Vector3(tailleMin, tailleMin, tailleMin);
     }
 
